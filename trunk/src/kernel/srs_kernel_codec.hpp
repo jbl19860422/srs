@@ -270,6 +270,10 @@ public:
     static bool hevc(char* data, int size);
 #endif
     /**
+     * check codec h264.
+     */
+    static bool h265(char* data, int size);
+    /**
      * check the video RTMP/flv header info,
      * @return true if video RTMP/flv header is ok.
      * @remark all type of audio is possible, no need to check audio.
@@ -637,6 +641,8 @@ class SrsCodecConfig
 public:
     SrsCodecConfig();
     virtual ~SrsCodecConfig();
+public:
+    virtual bool is_codec_ok() = 0;
 };
 
 /**
@@ -685,7 +691,7 @@ public:
     SrsAudioCodecConfig();
     virtual ~SrsAudioCodecConfig();
 public:
-    virtual bool is_aac_codec_ok();
+    virtual bool is_codec_ok();
 };
 
 #ifdef SRS_H265
@@ -755,6 +761,9 @@ public://H264
     // Note that we may resize the vector, so the under-layer bytes may change.
     std::vector<char> sequenceParameterSetNALUnit;
     std::vector<char> pictureParameterSetNALUnit;
+#ifdef SRS_H265
+    std::vector<char> videoParameterSetNALUnit;
+#endif
 public:
     // the avc payload format.
     SrsAvcPayloadFormat payload_format;
@@ -766,9 +775,8 @@ public:
     SrsVideoCodecConfig();
     virtual ~SrsVideoCodecConfig();
 public:
-    virtual bool is_avc_codec_ok();
+    virtual bool is_codec_ok();
 };
-
 /**
  * A frame, consists of a codec and a group of samples.
  */
@@ -899,7 +907,6 @@ private:
     virtual srs_error_t hevc_pps_data(char*& data_p, int& len);
     virtual srs_error_t hevc_sps_data(char*& data_p, int& len);
 #endif
-
 private:
     // Parse the H.264/hevc NALUs.
     virtual srs_error_t video_nalu_demux(SrsBuffer* stream);

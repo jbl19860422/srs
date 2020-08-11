@@ -463,7 +463,7 @@ srs_error_t SrsTsContext::encode_pes(ISrsStreamWriter* writer, SrsTsMessage* msg
         return err;
     }
 
-    bool invalid_codec = (sid != SrsTsStreamVideoH264 && && sid != SrsTsStreamAudioMp3 && sid != SrsTsStreamAudioAAC);
+    bool invalid_codec = (sid != SrsTsStreamVideoH264 && sid != SrsTsStreamAudioMp3 && sid != SrsTsStreamAudioAAC);
 #ifdef SRS_H265
     invalid_codec = invalid_codec && (sid != SrsTsStreamVideoHEVC);
 #endif
@@ -807,11 +807,6 @@ SrsTsPacket* SrsTsPacket::create_pmt(SrsTsContext* context,
         pmt->infos.push_back(new SrsTsPayloadPMTESInfo(as, apid));
     }
     
-    // if h.264 specified, use video to carry pcr.
-    bool is_valid_codec = (vs == SrsTsStreamVideoH264);
-#ifdef SRS_H265
-    is_valid_codec = is_valid_codec || (vs == SrsTsStreamVideoHEVC);
-#endif
     if (is_valid_codec) {
         pmt->PCR_PID = vpid;
         pmt->infos.push_back(new SrsTsPayloadPMTESInfo(vs, vpid));
@@ -2611,13 +2606,16 @@ SrsTsContextWriter::~SrsTsContextWriter()
 {
 }
 
-srs_error_t SrsTsContextWriter::write_audio(SrsTsMessage* audio)
+srs_error_t SrsTsContextWriter::write_audio(SrsTsMessage* audio, SrsAudioCodecId acodec_id)
 {
     srs_error_t err = srs_success;
     
     srs_info("hls: write audio pts=%" PRId64 ", dts=%" PRId64 ", size=%d",
         audio->pts, audio->dts, audio->PES_packet_length);
-    
+    if(acodec != acodec_id) {
+        acodec = acodec_id;
+    }
+
     if ((err = context->encode(writer, audio, vcodec, acodec)) != srs_success) {
         return srs_error_wrap(err, "ts: write audio");
     }
@@ -2626,13 +2624,16 @@ srs_error_t SrsTsContextWriter::write_audio(SrsTsMessage* audio)
     return err;
 }
 
-srs_error_t SrsTsContextWriter::write_video(SrsTsMessage* video)
+srs_error_t SrsTsContextWriter::write_video(SrsTsMessage* video, SrsVideoCodecId vcodec_id)
 {
     srs_error_t err = srs_success;
     
-    vcodec = video->_id;//update vcodec based on video frame
-    srs_info("hls: write video pts=%" PRId64 ", dts=%" PRId64 ", size=%d, codec:%d",
-        video->pts, video->dts, video->PES_packet_length, vcodec);
+    srs_info("hls: write video pts=%" PRId64 ", dts=%" PRId64 ", size=%d",
+        video->pts, video->dts, video->PES_packet_length);
+    if(vcodec != vcodec_id) {
+        vcodec = vcodec_id;
+    }
+    
     if ((err = context->encode(writer, video, vcodec, acodec)) != srs_success) {
         return srs_error_wrap(err, "ts: write video");
     }
@@ -3173,7 +3174,7 @@ srs_error_t SrsTsTransmuxer::flush_audio()
 {
     srs_error_t err = srs_success;
     
-    if ((err = tscw->write_audio(tsmc->audio)) != srs_success) {
+    if ((err = tscw->write_audio(tsmc->audio, tsmc->acodec_id)) != srs_success) {
         return srs_error_wrap(err, "ts: write audio");
     }
     
@@ -3187,7 +3188,7 @@ srs_error_t SrsTsTransmuxer::flush_video()
 {
     srs_error_t err = srs_success;
     
-    if ((err = tscw->write_video(tsmc->video)) != srs_success) {
+    if ((err = tscw->write_video(tsmc->video, tsmc->vcodec_id)) != srs_success) {
         return srs_error_wrap(err, "ts: write video");
     }
     

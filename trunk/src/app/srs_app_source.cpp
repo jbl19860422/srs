@@ -1064,7 +1064,7 @@ srs_error_t SrsOriginHub::on_video(SrsSharedPtrMessage* shared_video, bool is_se
 
     // Ignore video data when no sps/pps
     // @bug https://github.com/ossrs/srs/issues/703#issuecomment-578393155
-    if (format->vcodec && !format->vcodec->is_avc_codec_ok()) {
+    if (format->vcodec && !format->vcodec->is_codec_ok()) {
         return err;
     }
     

@@ -386,6 +386,8 @@ srs_error_t SrsHlsMuxer::segment_open()
             default_vcodec = SrsVideoCodecIdHEVC;
         } else if (default_vcodec_str == "vn") {
             default_vcodec = SrsVideoCodecIdDisabled;
+        }  else if (default_vcodec_str == "h265") {
+            default_vcodec = SrsVideoCodecIdHEVC;
         } else {
             srs_warn("hls: use h264 for other codec=%s", default_vcodec_str.c_str());
         }
@@ -551,7 +553,7 @@ srs_error_t SrsHlsMuxer::flush_audio(SrsTsMessageCache* cache)
     // update the duration of segment.
     current->append(cache->audio->pts / 90);
     
-    if ((err = current->tscw->write_audio(cache->audio)) != srs_success) {
+    if ((err = current->tscw->write_audio(cache->audio, cache->acodec_id)) != srs_success) {
         return srs_error_wrap(err, "hls: write audio");
     }
     
@@ -580,7 +582,7 @@ srs_error_t SrsHlsMuxer::flush_video(SrsTsMessageCache* cache)
     // update the duration of segment.
     current->append(cache->video->dts / 90);
     
-    if ((err = current->tscw->write_video(cache->video)) != srs_success) {
+    if ((err = current->tscw->write_video(cache->video, cache->vcodec_id)) != srs_success) {
         return srs_error_wrap(err, "hls: write video");
     }
     
@@ -1321,11 +1323,7 @@ srs_error_t SrsHls::on_video(SrsSharedPtrMessage* shared_video, SrsFormat* forma
     }
     
     srs_assert(format->vcodec);
-    bool ignore_frame = (format->vcodec->id != SrsVideoCodecIdAVC);
-#ifdef SRS_H265
-    ignore_frame = ignore_frame && (format->vcodec->id != SrsVideoCodecIdHEVC);
-#endif
-    if (ignore_frame) {
+    if (format->vcodec->id != SrsVideoCodecIdAVC && format->vcodec->id != SrsVideoCodecIdHEVC) {
         return err;
     }
     

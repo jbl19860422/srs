@@ -1279,9 +1279,9 @@ public:
     virtual ~SrsTsContextWriter();
 public:
     // Write an audio frame to ts,
-    virtual srs_error_t write_audio(SrsTsMessage* audio);
+    virtual srs_error_t write_audio(SrsTsMessage* audio, SrsAudioCodecId acodec_id);
     // Write a video frame to ts,
-    virtual srs_error_t write_video(SrsTsMessage* video);
+    virtual srs_error_t write_video(SrsTsMessage* video, SrsVideoCodecId vcodec_id);
 public:
     // get the video codec of ts muxer.
     virtual SrsVideoCodecId video_codec();
@@ -1315,6 +1315,8 @@ public:
     // The current ts message.
     SrsTsMessage* audio;
     SrsTsMessage* video;
+    SrsAudioCodecId acodec_id;
+    SrsVideoCodecId vcodec_id;
 public:
     SrsTsMessageCache();
     virtual ~SrsTsMessageCache();

@@ -466,7 +466,7 @@ SrsAudioCodecConfig::~SrsAudioCodecConfig()
 {
 }
 
-bool SrsAudioCodecConfig::is_aac_codec_ok()
+bool SrsAudioCodecConfig::is_codec_ok()
 {
     return !aac_extra_data.empty();
 }
@@ -491,7 +491,7 @@ SrsVideoCodecConfig::~SrsVideoCodecConfig()
 {
 }
 
-bool SrsVideoCodecConfig::is_avc_codec_ok()
+bool SrsVideoCodecConfig::is_codec_ok()
 {
     return !avc_extra_data.empty();
 }
@@ -574,9 +574,23 @@ srs_error_t SrsVideoFrame::add_sample(char* bytes, int size)
         return srs_error_wrap(err, "add frame");
     }
 
+    // for video, parse the nalu type, set the IDR flag.
 #ifdef SRS_H265
-    if (vcodec()->id == SrsVideoCodecIdAVC) {
-        // for video, parse the nalu type, set the IDR flag.
+    if(vcodec()->id == SrsVideoCodecIdHEVC) {
+        int type = SrsHevcNaluType(bytes[0]);
+        if(type >= NAL_UNIT_CODED_SLICE_BLA && type <= NAL_UNIT_RESERVED_23) {// key frame
+            has_idr = true;
+        } else if(type == NAL_UNIT_SPS || type == NAL_UNIT_PPS) {
+            has_sps_pps = true;
+        }
+
+        // if (first_nalu_type == SrsAvcNaluTypeReserved) {
+        //     first_nalu_type = type;
+        // }
+        return err;
+    } else
+#endif 
+    if(vcodec()->id == SrsVideoCodecIdAVC) {
         SrsAvcNaluType nal_unit_type = (SrsAvcNaluType)(bytes[0] & 0x1f);
         
         if (nal_unit_type == SrsAvcNaluTypeIDR) {
@@ -591,7 +605,6 @@ srs_error_t SrsVideoFrame::add_sample(char* bytes, int size)
             first_nalu_type = nal_unit_type;
         }
     }
-#endif
     
     return err;
 }
@@ -700,6 +713,7 @@ srs_error_t SrsFormat::on_video(int64_t timestamp, char* data, int size)
     if (!vcodec) {
         vcodec = new SrsVideoCodecConfig();
     }
+
     if (!video) {
         video = new SrsVideoFrame();
     }
@@ -945,10 +959,30 @@ temporalIdNested:%d, lengthSizeMinusOne:%d, numOfArrays:%d",
                                        data_item.nalUnitLength);
             srs_info("hevc nalu type:%d, array_completeness:%d, numNalus:%d, i:%d, nalUnitLength:%d",
                 hevc_unit.NAL_unit_type, hevc_unit.array_completeness, 
-                hevc_unit.numNalus, i, data_item.nalUnitLength);
+            hevc_unit.numNalus, i, data_item.nalUnitLength);
             hevc_unit.nalData_vec.push_back(data_item);
         }
         dec_conf_rec_p->nalu_vec.push_back(hevc_unit);
+    }
+
+    char *p;
+    int len;
+    hevc_vps_data(p, len);
+    if(p) {
+        vcodec->videoParameterSetNALUnit.resize(len);
+        memcpy(&vcodec->videoParameterSetNALUnit[0], p, len);
+    }
+
+    hevc_sps_data(p, len);
+    if(p) {
+        vcodec->sequenceParameterSetNALUnit.resize(len);
+        memcpy(&vcodec->sequenceParameterSetNALUnit[0], p, len);
+    }
+
+    hevc_pps_data(p, len);
+    if(p) {
+        vcodec->pictureParameterSetNALUnit.resize(len);
+        memcpy(&vcodec->pictureParameterSetNALUnit[0], p, len);
     }
     return srs_success;
 }
@@ -1272,7 +1306,7 @@ srs_error_t SrsFormat::video_nalu_demux(SrsBuffer* stream)
     srs_error_t err = srs_success;
     
     // ensure the sequence header demuxed
-    if (!vcodec->is_avc_codec_ok()) {
+    if (!vcodec->is_codec_ok()) {
         srs_warn("avc ignore type=%d for no sequence header", SrsVideoAvcFrameTraitNALU);
         return err;
     }
@@ -1338,7 +1372,8 @@ srs_error_t SrsFormat::video_nalu_demux(SrsBuffer* stream)
 #ifdef SRS_H265
 srs_error_t SrsFormat::hevc_vps_data(char*& data_p, int& len) {
     srs_error_t err = srs_success;
-
+    data_p = NULL;//make sure 
+    len = 0;
     for (size_t index = 0; index < vcodec->_hevcDecConfRecord.nalu_vec.size(); index++) {
         HVCCNALUnit nalu_unit = vcodec->_hevcDecConfRecord.nalu_vec[index];
         
@@ -1611,7 +1646,7 @@ srs_error_t SrsFormat::audio_aac_demux(SrsBuffer* stream, int64_t timestamp)
         }
     } else if (aac_packet_type == SrsAudioAacFrameTraitRawData) {
         // ensure the sequence header demuxed
-        if (!acodec->is_aac_codec_ok()) {
+        if (!acodec->is_codec_ok()) {
             srs_warn("aac ignore type=%d for no sequence header", aac_packet_type);
             return err;
         }
